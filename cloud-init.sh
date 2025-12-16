@@ -61,13 +61,20 @@ apt autoremove -y
 apt install -y sudo ufw openssh-server ca-certificates curl vim
 
 # Create user if it doesn't exist
-log "Ensuring admin user '${SSH_USER}' exists"
+log "Ensuring user '${SSH_USER}' exists"
 SSH_USER_HOME="/home/${SSH_USER}"
 if ! check_user_exists "${SSH_USER}"; then
     log "Creating user ${SSH_USER}..."
     useradd -m -s /bin/bash "${SSH_USER}" -d ${SSH_USER_HOME}
 else
     log "User ${SSH_USER} already exists"
+fi
+
+# Ensure sudo is available for the user if needed
+log "Ensuring user '${SSH_USER}' is in 'sudo' group"
+if ! groups "${SSH_USER}" | grep -qw sudo; then
+    log "Adding ${SSH_USER} to sudo group..."
+    usermod -aG sudo "${SSH_USER}"
 fi
 
 log "Checking sudo privileges for ${SSH_USER}"
@@ -81,16 +88,15 @@ fi
 
 # Allow SSH_USER authentification using public key
 log "Adding Public SSH key for authentification"
-mkdir -p "${SSH_USER_HOME}/.ssh"
 SSH_AUTHORIZED_KEYS_FILE="${SSH_USER_HOME}/.ssh/authorized_keys"
-echo "${SSH_PUBKEY}" > "${SSH_AUTHORIZED_KEYS_FILE}"
-chmod 600 "${SSH_AUTHORIZED_KEYS_FILE}"
-chown -R "${SSH_USER}:${SSH_USER}" "${SSH_USER_HOME}/.ssh"
-
-# Ensure sudo is available for the user if needed
-if ! groups "${SSH_USER}" | grep -qw sudo; then
-    log "Adding ${SSH_USER} to sudo group..."
-    usermod -aG sudo "${SSH_USER}"
+if [ ! -f ${SSH_AUTHORIZED_KEYS_FILE} ]; then
+  mkdir -p "${SSH_USER_HOME}/.ssh"
+  echo "${SSH_PUBKEY}" > "${SSH_AUTHORIZED_KEYS_FILE}"
+  chmod 600 "${SSH_AUTHORIZED_KEYS_FILE}"
+  chown -R "${SSH_USER}:${SSH_USER}" "${SSH_USER_HOME}/.ssh"
+  log "SSH public key added for ${SSH_USER}"
+else
+  log "Some public key are already been configured for ${SSH_USER}, skipping"
 fi
 
 # Harden SSH
